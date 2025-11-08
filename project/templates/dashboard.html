@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - PosturePerfect</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Inter font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Define custom styles from the main site */
+        :root {
+            --bg-light: #F0FDFA; /* Light mint/cyan */
+            --primary: #14B8A6; /* Teal */
+            --primary-dark: #0F766E;
+            --danger: #E11D48; /* Red for errors */
+            --danger-light: #FFF1F2; /* Light red */
+            --warning: #F59E0B; /* Amber */
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8FAFC; /* Use a very light gray for the main bg */
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+        }
+        .btn-primary:disabled {
+            background-color: #94A3B8;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-danger:hover {
+            background-color: #BE123C; /* Darker red */
+            box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+        }
+
+        .btn-outline {
+            border: 1px solid #E0E0E0;
+            color: #333;
+            transition: all 0.3s ease;
+            background-color: white;
+        }
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background-color: var(--bg-light);
+        }
+
+        /* Sidebar Navigation */
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem; /* 12px */
+            font-weight: 500;
+            color: #4B5563; /* gray-600 */
+            transition: all 0.2s ease;
+        }
+        .sidebar-link:hover {
+            background-color: var(--bg-light);
+            color: var(--primary);
+        }
+        .sidebar-link.active {
+            background-color: var(--bg-light);
+            color: var(--primary);
+            font-weight: 600;
+        }
+        .sidebar-link svg {
+            margin-right: 0.75rem;
+            width: 1.5rem; /* 24px */
+            height: 1.5rem;
+        }
+
+        /* Dashboard Widget Card */
+        .widget-card {
+            background-color: white;
+            border-radius: 1.5rem; /* 24px */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #F1F5F9; /* gray-100 */
+            overflow: hidden;
+        }
+        
+        /* Stats Tab */
+        .stat-tab {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            color: #6B7280;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .stat-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        /* Mock Chart Bar */
+        .chart-bar {
+            background-color: var(--primary);
+            border-radius: 6px 6px 0 0;
+            transition: height 0.3s ease-out;
+        }
+        .chart-bar-bg {
+            background-color: #F1F5F9; /* gray-100 */
+            border-radius: 6px;
+        }
+        
+        /* Toast Notification */
+        #toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            transform: translateX(calc(100% + 1.5rem));
+            transition: transform 0.4s ease-in-out;
+            z-index: 100;
+        }
+        #toast.show {
+            transform: translateX(0);
+        }
+
+        video {
+            width: 50%;
+            height: 50%;
+            border-radius: 1rem;
+            object-fit: cover;
+        }
+
+        #calibration-success {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+
+
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-72 bg-white shadow-lg flex-shrink-0 h-screen sticky top-0 flex flex-col p-6">
+            <!-- Logo -->
+            <a href="#" class="inline-block text-3xl font-bold text-gray-900 mb-10 px-3">
+                Posture<span class="text-[var(--primary)]">Perfect</span>
+            </a>
+            
+            <!-- Navigation -->
+            <nav class="flex-1 space-y-3">
+                <a href="{% url "dashboard" %}" class="sidebar-link active">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                    Dashboard
+                </a>
+                {% comment %} <a href="#" class="sidebar-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    Statistics
+                </a> {% endcomment %}
+                <a href="{% url "settings" %}" class="sidebar-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.096 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    Settings
+                </a>
+            </nav>
+            
+            <!-- User Profile / Logout -->
+            <div class="mt-auto pt-6 border-t border-gray-200">
+                <div class="flex items-center">
+                    <img class="h-12 w-12 rounded-full object-cover" src="https://placehold.co/100x100/E0E7FF/4F46E5?text=JD" alt="User Avatar">
+                    <div class="ml-4">
+                        <p class="font-semibold text-gray-800">{{request.user.first_name}}</p>
+                        <a href="login.html" class="text-sm text-gray-500 hover:text-[var(--danger)]">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1">
+            <!-- Main Header -->
+            <header class="bg-white shadow-sm p-8 sticky top-0 z-10">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">Welcome back, {{request.user.get_full_name}}!</h1>
+                        <p class="text-gray-600 mt-1">Here's your posture overview for today.</p>
+                    </div>
+                    <div>
+                        <!-- Main Monitoring Toggle Button -->
+                        <button id="toggle-monitoring-btn" class="btn-primary flex items-center justify-center rounded-full py-4 px-8 text-lg font-semibold shadow-lg shadow-[var(--primary)]/30">
+                            <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <svg id="stop-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                            </svg>
+                            <span id="monitoring-btn-text">Start Monitoring</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Widgets Grid -->
+            <main class="p-8">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    
+                    <!-- Calibration Widget (Span 2) -->
+                    <div class="widget-card lg:col-span-2 p-8 flex flex-col">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-4">Step 1: Calibrate Your Position</h2>
+                        <p class="text-gray-600 mb-6">Before we start, let's find your perfect sitting position. Sit up straight, face your webcam, and hit 'Calibrate'.</p>
+                        
+                        <!-- Calibration States -->
+                        <div id="calibration-default" class="flex-1 flex flex-col items-center justify-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-300 p-12 text-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <p class="text-gray-500 font-medium">Webcam feed will appear here</p>
+                        </div>
+                        
+                        <div id="calibration-success" class="flex-1 flex flex-col items-center justify-center bg-green-50 rounded-2xl border-2 border-dashed border-green-300 p-12 text-center hidden">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 text-green-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p class="text-green-700 font-semibold text-xl">Calibration Complete!</p>
+                            <p class="text-green-600">We've saved your perfect posture. You can now start monitoring.</p>
+                        </div>
+
+                        <button id="calibrate-btn" class="btn-outline w-full rounded-full py-4 text-lg font-semibold mt-6">
+                            Start Calibration
+                        </button>
+                    </div>
+
+                    <!-- Live Status Widget (Span 1) -->
+                    <div class="widget-card lg:col-span-1 p-8">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-6">Live Status</h2>
+                        <div class="space-y-6">
+                            <!-- Monitoring Status -->
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 mb-2">Monitoring</p>
+                                <div id="monitoring-status-badge" class="flex items-center">
+                                    <span class="h-3 w-3 bg-gray-400 rounded-full mr-3"></span>
+                                    <span id="monitoring-status-text" class="text-lg font-semibold text-gray-700">OFF</span>
+                                </div>
+                            </div>
+                            <!-- Posture Status -->
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 mb-2">Current Posture</p>
+                                <div id="posture-status-badge">
+                                    <p id="posture-status-text" class="text-3xl font-bold text-gray-400">---</p>
+                                </div>
+                            </div>
+                            <!-- Slouch Count -->
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 mb-2">Slouches Today</p>
+                                <p id="slouch-count" class="text-5xl font-bold text-[var(--primary)]">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Statistics Widget (Span 3) -->
+                    <div class="widget-card lg:col-span-3">
+                        <div class="p-8 border-b border-gray-200">
+                            <h2 class="text-2xl font-bold text-gray-900">Your Progress</h2>
+                            <!-- Stats Tabs -->
+                            <div class="mt-4 flex space-x-4">
+                                <div id="tab-hourly" class="stat-tab active">Hourly</div>
+                                <div id="tab-daily" class="stat-tab">Daily</div>
+                                <div id="tab-monthly" class="stat-tab">Monthly</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Chart Area -->
+                        <div class="p-8">
+                            <!-- Mock Bar Chart -->
+                            <div class="h-64 flex items-end justify-between space-x-3">
+                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 30%;"></div></div>
+                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 50%;"></div></div>
+                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 20%;"></div></div>
+                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 70%;"></div></div>
+                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 40%;"></div></div>
+                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 60%;"></div></div>
+                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 80%;"></div></div>
+                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 30%;"></div></div>
+                            </div>
+                            <!-- X-Axis Labels -->
+                            <div class="flex justify-between space-x-3 mt-2 text-sm text-gray-500">
+                                <span class="w-full text-center">9am</span>
+                                <span class="w-full text-center">10am</span>
+                                <span class="w-full text-center">11am</span>
+                                <span class="w-full text-center">12pm</span>
+                                <span class="w-full text-center">1pm</span>
+                                <span class="w-full text-center">2pm</span>
+                                <span class="w-full text-center">3pm</span>
+                                <span class="w-full text-center">4pm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="bg-[var(--danger)] text-white">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+            <p class="font-bold text-lg">Posture Alert!</p>
+            <p>You're slouching. Please sit up straight.</p>
+        </div>
+    </div>
+    
+    <!-- Info Toast (for calibration) -->
+    <div id="toast-info" class="bg-blue-600 text-white" style="position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 1rem 1.5rem; border-radius: 0.75rem; display: flex; align-items: center; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); transform: translateX(calc(100% + 1.5rem)); transition: transform 0.4s ease-in-out; z-index: 100;">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p id="toast-info-text" class="font-semibold text-lg"></p>
+    </div>
+
+
+    <script>
+    // --- State ---
+    let isCalibrated = false;
+    let isMonitoring = false;
+    let slouchCount = 0;
+    let slouchSimulationTimer = null;
+    let videoStream = null;
+
+    // --- Element Selectors ---
+    const calibrateBtn = document.getElementById('calibrate-btn');
+    const calibrationDefault = document.getElementById('calibration-default');
+    const calibrationSuccess = document.getElementById('calibration-success');
+    
+    const toggleMonitoringBtn = document.getElementById('toggle-monitoring-btn');
+    const monitoringBtnText = document.getElementById('monitoring-btn-text');
+    const playIcon = document.getElementById('play-icon');
+    const stopIcon = document.getElementById('stop-icon');
+
+    const monitoringStatusBadge = document.getElementById('monitoring-status-badge').querySelector('span');
+    const monitoringStatusText = document.getElementById('monitoring-status-text');
+    
+    const postureStatusText = document.getElementById('posture-status-text');
+    const slouchCountText = document.getElementById('slouch-count');
+
+    const slouchToast = document.getElementById('toast');
+    const infoToast = document.getElementById('toast-info');
+    const infoToastText = document.getElementById('toast-info-text');
+
+    // --- Create Video Element for Webcam ---
+    const videoElement = document.createElement('video');
+    videoElement.autoplay = true;
+    videoElement.playsInline = true;
+    videoElement.classList.add('rounded-2xl', 'max-w-full', 'shadow-lg', 'border', 'border-gray-300');
+
+    // --- Helper: Stop Camera Stream ---
+    function stopCamera() {
+        if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+            videoStream = null;
+        }
+    }
+
+    // --- Show Info Toast ---
+    function showInfoToast(message) {
+        infoToastText.textContent = message;
+        infoToast.style.transform = 'translateX(0)';
+        setTimeout(() => {
+            infoToast.style.transform = 'translateX(calc(100% + 1.5rem))';
+        }, 3000);
+    }
+
+    // --- Show Slouch Alert Toast ---
+    function showSlouchToast() {
+        slouchToast.classList.add('show');
+        setTimeout(() => {
+            slouchToast.classList.remove('show');
+        }, 3000);
+    }
+
+    // --- Calibration Logic ---
+    calibrateBtn.addEventListener('click', async () => {
+        if (isCalibrated) {
+            // Recalibration logic
+            stopCamera();
+            isCalibrated = false;
+            calibrationSuccess.classList.add('hidden');
+            calibrationDefault.classList.remove('hidden');
+            calibrationDefault.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <p class="text-gray-500 font-medium">Webcam feed will appear here</p>
+            `;
+            calibrateBtn.textContent = 'Start Calibration';
+            return;
+        }
+
+        calibrateBtn.disabled = true;
+        calibrateBtn.textContent = 'Calibrating...';
+
+        try {
+            // Ask for webcam access
+            videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            calibrationDefault.innerHTML = "";
+            calibrationDefault.appendChild(videoElement);
+            videoElement.srcObject = videoStream;
+
+            // Simulate calibration for 5 seconds
+            setTimeout(() => {
+                stopCamera();
+
+                calibrationDefault.classList.add('hidden');
+                calibrationSuccess.classList.remove('hidden');
+                calibrateBtn.textContent = 'Recalibrate';
+                calibrateBtn.disabled = false;
+                isCalibrated = true;
+            }, 5000);
+
+        } catch (error) {
+            console.error("Camera access denied:", error);
+            alert("Unable to access camera. Please allow webcam permission.");
+            calibrateBtn.textContent = 'Start Calibration';
+            calibrateBtn.disabled = false;
+        }
+    });
+
+    // --- Monitoring Toggle ---
+    toggleMonitoringBtn.addEventListener('click', () => {
+        if (!isCalibrated) {
+            showInfoToast('Please calibrate your posture first!');
+            return;
+        }
+
+        isMonitoring = !isMonitoring;
+
+        if (isMonitoring) {
+            monitoringBtnText.textContent = 'Stop Monitoring';
+            toggleMonitoringBtn.classList.remove('btn-primary');
+            toggleMonitoringBtn.classList.add('btn-danger');
+            playIcon.classList.add('hidden');
+            stopIcon.classList.remove('hidden');
+            
+            monitoringStatusBadge.classList.remove('bg-gray-400');
+            monitoringStatusBadge.classList.add('bg-green-500');
+            monitoringStatusText.textContent = 'ON';
+
+            setPosture(true);
+            startSlouchSimulation();
+        } else {
+            monitoringBtnText.textContent = 'Start Monitoring';
+            toggleMonitoringBtn.classList.remove('btn-danger');
+            toggleMonitoringBtn.classList.add('btn-primary');
+            playIcon.classList.remove('hidden');
+            stopIcon.classList.add('hidden');
+
+            monitoringStatusBadge.classList.remove('bg-green-500');
+            monitoringStatusBadge.classList.add('bg-gray-400');
+            monitoringStatusText.textContent = 'OFF';
+
+            setPosture(null);
+            stopSlouchSimulation();
+        }
+    });
+
+    // --- Set Posture Status ---
+    function setPosture(isGood) {
+        if (isGood === null) {
+            postureStatusText.textContent = '---';
+            postureStatusText.classList.remove('text-green-500', 'text-[var(--danger)]');
+            postureStatusText.classList.add('text-gray-400');
+        } else if (isGood) {
+            postureStatusText.textContent = 'GOOD';
+            postureStatusText.classList.remove('text-gray-400', 'text-[var(--danger)]');
+            postureStatusText.classList.add('text-green-500');
+        } else {
+            postureStatusText.textContent = 'SLOUCHING!';
+            postureStatusText.classList.remove('text-gray-400', 'text-green-500');
+            postureStatusText.classList.add('text-[var(--danger)]');
+        }
+    }
+
+    // --- Slouch Simulation Logic ---
+    function startSlouchSimulation() {
+        slouchSimulationTimer = setInterval(() => {
+            if (isMonitoring && Math.random() < 0.3) {
+                triggerSlouch();
+            }
+        }, 5000);
+    }
+
+    function stopSlouchSimulation() {
+        clearInterval(slouchSimulationTimer);
+    }
+
+    function triggerSlouch() {
+        if (!isMonitoring) return;
+
+        setPosture(false);
+        showSlouchToast();
+
+        slouchCount++;
+        slouchCountText.textContent = slouchCount;
+
+        setTimeout(() => {
+            if (isMonitoring) setPosture(true);
+        }, 4000);
+    }
+
+    // --- Statistics Tabs ---
+    const tabs = document.querySelectorAll('.stat-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            randomizeChart();
+        });
+    });
+
+    function randomizeChart() {
+        const bars = document.querySelectorAll('.chart-bar');
+        bars.forEach(bar => {
+            const newHeight = Math.floor(Math.random() * 80) + 20;
+            bar.style.height = `${newHeight}%`;
+        });
+    }
+
+    randomizeChart();
+</script>
+
+</body>
+</html>

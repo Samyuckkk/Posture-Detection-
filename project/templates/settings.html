@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - PosturePerfect</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Inter font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Define custom styles from the main site */
+        :root {
+            --bg-light: #F0FDFA; /* Light mint/cyan */
+            --primary: #14B8A6; /* Teal */
+            --primary-dark: #0F766E;
+            --danger: #E11D48; /* Red for errors */
+            --danger-light: #FFF1F2; /* Light red */
+            --warning: #F59E0B; /* Amber */
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8FAFC; /* Use a very light gray for the main bg */
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+        }
+        .btn-primary:disabled {
+            background-color: #94A3B8;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-danger:hover {
+            background-color: #BE123C; /* Darker red */
+            box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+        }
+
+        .btn-outline {
+            border: 1px solid #E0E0E0;
+            color: #333;
+            transition: all 0.3s ease;
+            background-color: white;
+        }
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background-color: var(--bg-light);
+        }
+        .btn-outline:disabled {
+            border-color: #E0E0E0;
+            color: #94A3B8;
+            background-color: #F8FAFC;
+            cursor: not-allowed;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem; /* 12px */
+            font-weight: 500;
+            color: #4B5563; /* gray-600 */
+            transition: all 0.2s ease;
+        }
+        .sidebar-link:hover {
+            background-color: var(--bg-light);
+            color: var(--primary);
+        }
+        .sidebar-link.active {
+            background-color: var(--bg-light);
+            color: var(--primary);
+            font-weight: 600;
+        }
+        .sidebar-link svg {
+            margin-right: 0.75rem;
+            width: 1.5rem; /* 24px */
+            height: 1.5rem;
+        }
+
+        /* Dashboard Widget Card */
+        .widget-card {
+            background-color: white;
+            border-radius: 1.5rem; /* 24px */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #F1F5F9; /* gray-100 */
+            overflow: hidden;
+        }
+
+        /* Form Input */
+        .form-input {
+            border: 1px solid #D1D5DB; /* gray-300 */
+            border-radius: 0.5rem; /* 8px */
+            padding: 0.75rem 1rem;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
+        }
+        
+        /* Custom Toggle Switch */
+        .toggle-switch {
+            width: 48px;
+            height: 28px;
+            background-color: #E5E7EB; /* gray-200 */
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .toggle-switch-dot {
+            width: 20px;
+            height: 20px;
+            background-color: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            transition: transform 0.3s ease;
+        }
+        .toggle-switch.active {
+            background-color: var(--primary);
+        }
+        .toggle-switch.active .toggle-switch-dot {
+            transform: translateX(20px);
+        }
+
+        /* Custom Slider */
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #E5E7EB; /* gray-200 */
+            border-radius: 9999px;
+            outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Custom Radio Button */
+        .radio-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 0.75rem 1rem;
+            border: 2px solid #E5E7EB; /* gray-200 */
+            border-radius: 0.75rem; /* 12px */
+            transition: all 0.3s ease;
+        }
+        .radio-label:hover {
+            background-color: var(--bg-light);
+        }
+        .radio-input {
+            display: none; /* Hide default radio */
+        }
+        .radio-custom {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #D1D5DB; /* gray-300 */
+            border-radius: 50%;
+            margin-right: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .radio-custom-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            transform: scale(0);
+            transition: transform 0.3s ease;
+        }
+        .radio-input:checked + .radio-label {
+            border-color: var(--primary);
+            background-color: var(--bg-light);
+        }
+        .radio-input:checked + .radio-label .radio-custom {
+            border-color: var(--primary);
+        }
+        .radio-input:checked + .radio-label .radio-custom-dot {
+            transform: scale(1);
+        }
+
+        /* Recording Animation */
+        .recording-dot {
+            width: 12px;
+            height: 12px;
+            background-color: var(--danger);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        /* Toast Notification */
+        #toast-info {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            transform: translateX(calc(100% + 1.5rem));
+            transition: transform 0.4s ease-in-out;
+            z-index: 100;
+            background-color: #2563EB; /* blue-600 */
+            color: white;
+        }
+        #toast-info.show {
+            transform: translateX(0);
+        }
+
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-72 bg-white shadow-lg flex-shrink-0 h-screen sticky top-0 flex flex-col p-6">
+            <!-- Logo -->
+            <a href="#" class="inline-block text-3xl font-bold text-gray-900 mb-10 px-3">
+                Posture<span class="text-[var(--primary)]">Perfect</span>
+            </a>
+            
+            <!-- Navigation -->
+            <nav class="flex-1 space-y-3">
+                <a href="{% url "dashboard" %}" class="sidebar-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                    Dashboard
+                </a>
+                {% comment %} <a href="#" class="sidebar-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    Statistics
+                </a> {% endcomment %}
+                <a href="{% url "settings" %}" class="sidebar-link active"> <!-- Set as active -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.096 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    Settings
+                </a>
+            </nav>
+            
+            <!-- User Profile / Logout -->
+            <div class="mt-auto pt-6 border-t border-gray-200">
+                <div class="flex items-center">
+                    <img class="h-12 w-12 rounded-full object-cover" src="https://placehold.co/100x100/E0E7FF/4F46E5?text=JD" alt="User Avatar">
+                    <div class="ml-4">
+                        <p class="font-semibold text-gray-800">Jane Doe</p>
+                        <a href="login.html" class="text-sm text-gray-500 hover:text-[var(--danger)]">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1">
+            <!-- Main Header -->
+            <header class="bg-white shadow-sm p-8 sticky top-0 z-10">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">Settings & Preferences</h1>
+                        <p class="text-gray-600 mt-1">Customize your PosturePerfect experience.</p>
+                    </div>
+                    <div>
+                        <button id="save-settings-btn" class="btn-primary flex items-center justify-center rounded-full py-4 px-8 text-lg font-semibold shadow-lg shadow-[var(--primary)]/30">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Settings Grid -->
+            <main class="p-8">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    
+                    <!-- Left Column (Alerts) -->
+                    <div class="widget-card lg:col-span-2 p-8 space-y-8">
+                        
+                        <!-- Section: General Alerts -->
+                        <section>
+                            <h2 class="text-2xl font-bold text-gray-900 mb-6">Alert Settings</h2>
+                            
+                            <!-- Enable Alerts Toggle -->
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <label for="enable-alerts" class="text-lg font-semibold text-gray-800">Enable Posture Alerts</label>
+                                <div id="toggle-alerts" class="toggle-switch active">
+                                    <div class="toggle-switch-dot"></div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Section: Alert Text -->
+                        <section>
+                            <label for="alert-text" class="block text-lg font-semibold text-gray-800 mb-3">Custom Alert Message</label>
+                            <input type="text" id="alert-text" class="form-input" value="You're slouching. Please sit up straight.">
+                        </section>
+
+                        <!-- Section: Alert Sound -->
+                        <section>
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Alert Sound</h3>
+                            
+                            <!-- Sound Options -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- Option 1: Beep -->
+                                <div>
+                                    <input type="radio" name="alert-sound" id="sound-beep" class="radio-input" checked>
+                                    <label for="sound-beep" class="radio-label">
+                                        <span class="radio-custom"><span class="radio-custom-dot"></span></span>
+                                        <span class="font-medium">Beep</span>
+                                    </label>
+                                </div>
+                                <!-- Option 2: Chime -->
+                                <div>
+                                    <input type="radio" name="alert-sound" id="sound-chime" class="radio-input">
+                                    <label for="sound-chime" class="radio-label">
+                                        <span class="radio-custom"><span class="radio-custom-dot"></span></span>
+                                        <span class="font-medium">Chime</span>
+                                    </label>
+                                </div>
+                                <!-- Option 3: Vibrate (Silent) -->
+                                <div>
+                                    <input type="radio" name="alert-sound" id="sound-vibrate" class="radio-input">
+                                    <label for="sound-vibrate" class="radio-label">
+                                        <span class="radio-custom"><span class="radio-custom-dot"></span></span>
+                                        <span class="font-medium">Vibrate (Silent)</span>
+                                    </label>
+                                </div>
+                                <!-- Option 4: Custom -->
+                                <div>
+                                    <input type="radio" name="alert-sound" id="sound-custom" class="radio-input">
+                                    <label for="sound-custom" class="radio-label">
+                                        <span class="radio-custom"><span class="radio-custom-dot"></span></span>
+                                        <span class="font-medium">Custom Sound</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Section: Custom Sound Recorder -->
+                        <section id="custom-recorder-section" class="p-6 bg-gray-50 rounded-xl hidden">
+                            <h4 class="font-semibold text-gray-700 mb-4">Record Your Alert</h4>
+                            
+                            <!-- Recording Status -->
+                            <div id="recording-status" class="flex items-center space-x-3 mb-4 hidden">
+                                <div class="recording-dot"></div>
+                                <span class="font-medium text-gray-700">Recording...</span>
+                            </div>
+
+                            <!-- Controls -->
+                            <div class="flex flex-wrap gap-4">
+                                <button id="record-btn" class="btn-danger flex items-center rounded-full py-3 px-6 font-semibold">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd" /></svg>
+                                    Record
+                                </button>
+                                <button id="stop-btn" class="btn-outline flex items-center rounded-full py-3 px-6 font-semibold" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 9a1 1 0 00-1 1v0a1 1 0 001 1h2a1 1 0 001-1v0a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                    Stop
+                                </button>
+                                <button id="play-btn" class="btn-outline flex items-center rounded-full py-3 px-6 font-semibold" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8.002v3.996a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664l-3.197-2.132z" clip-rule="evenodd" /></svg>
+                                    Play
+                                </button>
+                            </div>
+                            <p id="record-permission-error" class="text-sm text-[var(--danger)] mt-3 hidden">
+                                Microphone permission denied. Please allow access in your browser settings.
+                            </p>
+                        </section>
+                    </div>
+
+                    <!-- Right Column (Detection & Appearance) -->
+                    <div class="widget-card lg:col-span-1 p-8 space-y-10">
+                        <!-- Section: Detection -->
+                        <section>
+                            <h2 class="text-2xl font-bold text-gray-900 mb-6">Detection</h2>
+                            
+                            <!-- Sensitivity Slider -->
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <label for="sensitivity-slider" class="text-lg font-semibold text-gray-800">Sensitivity</label>
+                                    <span id="sensitivity-value" class="font-medium text-[var(--primary)]">Balanced</span>
+                                </div>
+                                <input type="range" id="sensitivity-slider" class="slider" min="1" max="3" value="2">
+                                <div class="flex justify-between text-sm text-gray-500 mt-2">
+                                    <span>Relaxed</span>
+                                    <span>Balanced</span>
+                                    <span>Strict</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Frequency Slider -->
+                            <div class="mt-8">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label for="frequency-slider" class="text-lg font-semibold text-gray-800">Alert Frequency</label>
+                                    <span id="frequency-value" class="font-medium text-[var(--primary)]">5 min</span>
+                                </div>
+                                <input type="range" id="frequency-slider" class="slider" min="1" max="4" value="2">
+                                <div class="flex justify-between text-sm text-gray-500 mt-2">
+                                    <span>1 min</span>
+                                    <span>5 min</span>
+                                    <span>10 min</span>
+                                    <span>15 min</span>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Section: Appearance -->
+                        <section>
+                            <h2 class="text-2xl font-bold text-gray-900 mb-6">Appearance</h2>
+                            <!-- Dark Mode Toggle -->
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <label for="enable-dark-mode" class="text-lg font-semibold text-gray-800">Enable Dark Mode</label>
+                                <div id="toggle-dark-mode" class="toggle-switch">
+                                    <div class="toggle-switch-dot"></div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Info Toast (for saving) -->
+    <div id="toast-info">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p id="toast-info-text" class="font-semibold text-lg"></p>
+    </div>
+
+
+    <script>
+        // --- Element Selectors ---
+        const saveBtn = document.getElementById('save-settings-btn');
+        const infoToast = document.getElementById('toast-info');
+        const infoToastText = document.getElementById('toast-info-text');
+
+        // Toggles
+        const alertsToggle = document.getElementById('toggle-alerts');
+        const darkModeToggle = document.getElementById('toggle-dark-mode');
+
+        // Sliders
+        const sensitivitySlider = document.getElementById('sensitivity-slider');
+        const sensitivityValue = document.getElementById('sensitivity-value');
+        const sensitivityMap = { 1: 'Relaxed', 2: 'Balanced', 3: 'Strict' };
+        
+        const frequencySlider = document.getElementById('frequency-slider');
+        const frequencyValue = document.getElementById('frequency-value');
+        const frequencyMap = { 1: '1 min', 2: '5 min', 3: '10 min', 4: '15 min' };
+
+        // Custom Sound
+        const customSoundRadio = document.getElementById('sound-custom');
+        const recorderSection = document.getElementById('custom-recorder-section');
+        const soundRadios = document.querySelectorAll('input[name="alert-sound"]');
+        const recordBtn = document.getElementById('record-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const playBtn = document.getElementById('play-btn');
+        const recordingStatus = document.getElementById('recording-status');
+        const permissionError = document.getElementById('record-permission-error');
+        
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let customAudio = null;
+
+        // --- Functions ---
+
+        // Show info toast
+        function showInfoToast(message, duration = 3000) {
+            infoToastText.textContent = message;
+            infoToast.classList.add('show');
+            setTimeout(() => {
+                infoToast.classList.remove('show');
+            }, duration);
+        }
+        
+        // --- Event Listeners ---
+
+        // Save Button
+        saveBtn.addEventListener('click', () => {
+            showInfoToast('Settings saved successfully!');
+            // In a real app, you'd collect all settings and send them to a server here.
+        });
+
+        // Toggle Switches
+        function setupToggle(toggleElement) {
+            toggleElement.addEventListener('click', () => {
+                toggleElement.classList.toggle('active');
+            });
+        }
+        setupToggle(alertsToggle);
+        setupToggle(darkModeToggle);
+
+        // Sliders
+        sensitivitySlider.addEventListener('input', (e) => {
+            sensitivityValue.textContent = sensitivityMap[e.target.value];
+        });
+        frequencySlider.addEventListener('input', (e) => {
+            frequencyValue.textContent = frequencyMap[e.target.value];
+        });
+        
+        // --- Audio Recording Logic ---
+
+        // Show/Hide Recorder
+        soundRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (customSoundRadio.checked) {
+                    recorderSection.classList.remove('hidden');
+                } else {
+                    recorderSection.classList.add('hidden');
+                }
+            });
+        });
+
+        // Record Button
+        recordBtn.addEventListener('click', async () => {
+            permissionError.classList.add('hidden');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = []; // Clear old chunks
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    customAudio = new Audio(audioUrl);
+                    
+                    // Update UI
+                    recordingStatus.classList.add('hidden');
+                    recordBtn.disabled = false;
+                    stopBtn.disabled = true;
+                    playBtn.disabled = false;
+                    
+                    // Stop the media stream tracks to turn off the mic icon
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                // Start recording
+                mediaRecorder.start();
+
+                // Update UI
+                recordingStatus.classList.remove('hidden');
+                recordBtn.disabled = true;
+                stopBtn.disabled = false;
+                playBtn.disabled = true;
+
+            } catch (err) {
+                console.error("Error accessing microphone:", err);
+                permissionError.classList.remove('hidden');
+            }
+        });
+        
+        // Stop Button
+        stopBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+        });
+
+        // Play Button
+        playBtn.addEventListener('click', () => {
+            if (customAudio) {
+                customAudio.play();
+            }
+        });
+
+    </script>
+</body>
+</html>
