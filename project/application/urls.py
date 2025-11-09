@@ -24,4 +24,6 @@ urlpatterns = [
     path('login/', views.login_page, name='login_page'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('settings/', views.settings, name='settings'),
+    path("api/frame/", views.process_frame, name="process_frame"),
+    path("api/calibrate/", views.calibrate_posture, name="calibrate_posture"),
 ]
