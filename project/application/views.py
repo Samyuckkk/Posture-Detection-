@@ -117,7 +117,7 @@ def process_frame(request):
             forward_change = forward_offset - user_baseline["forward"]
 
             # Tolerance thresholds (tune these)
-            if vertical_change > 0.03 or forward_change > 0.02:
+            if vertical_change > 0.005 or forward_change > 0.005:
                 posture = "slouching"
             else:
                 posture = "upright"
@@ -135,30 +135,68 @@ def process_frame(request):
 @csrf_exempt
 def calibrate_posture(request):
     """
-    Receives a short burst of upright frames to compute baseline posture.
+    Dynamically calibrates user posture — waits until valid landmarks detected.
     """
     if request.method != "POST":
         return JsonResponse({"error": "Invalid method"}, status=405)
 
     try:
-        frames = request.POST.getlist("frames[]")  # multiple base64 frames
+        frames = request.POST.getlist("frames[]")
+        if not frames:
+            return JsonResponse({"status": "incomplete", "error": "No frames received"})
+
         verticals, forwards = [], []
+
+        # for data_url in frames:
+        #     if not data_url:
+        #         continue
+        #     header, encoded = data_url.split(",", 1)
+        #     img_bytes = base64.b64decode(encoded)
+        #     np_arr = np.frombuffer(img_bytes, np.uint8)
+        #     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        #     if frame is None or frame.size == 0:
+        #         continue
+
+        #     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        #     results = pose.process(rgb)
+        #     if not results.pose_landmarks:
+        #         continue
+
+        #     lm = results.pose_landmarks.landmark
+        #     ls, rs = lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value], lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
+        #     lh, rh = lm[mp_pose.PoseLandmark.LEFT_HIP.value], lm[mp_pose.PoseLandmark.RIGHT_HIP.value]
+        #     nose = lm[mp_pose.PoseLandmark.NOSE.value]
+
+        #     shoulder_y = (ls.y + rs.y) / 2
+        #     hip_y = (lh.y + rh.y) / 2
+        #     shoulder_x = (ls.x + rs.x) / 2
+
+        #     verticals.append(hip_y - shoulder_y)
+        #     forwards.append(abs(nose.x - shoulder_x))
 
         for data_url in frames:
             if not data_url:
                 continue
 
-            # Decode the frame
-            header, encoded = data_url.split(",", 1)
+            # Split and validate encoded image data
+            try:
+                header, encoded = data_url.split(",", 1)
+            except ValueError:
+                continue  # skip malformed frame
+
+            if not encoded.strip():
+                continue  # skip empty base64 strings
+
             img_bytes = base64.b64decode(encoded)
+            if not img_bytes:
+                continue  # skip empty byte buffers
+
             np_arr = np.frombuffer(img_bytes, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-            # 🩶 Skip invalid or blank frames
             if frame is None or frame.size == 0:
-                print("⚠️ Skipping empty frame during calibration")
-                continue
+                continue  # skip invalid/empty frames
 
+            # ✅ At this point, frame is guaranteed valid
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = pose.process(rgb)
             if not results.pose_landmarks:
@@ -172,16 +210,19 @@ def calibrate_posture(request):
             shoulder_y = (ls.y + rs.y) / 2
             hip_y = (lh.y + rh.y) / 2
             shoulder_x = (ls.x + rs.x) / 2
+
             verticals.append(hip_y - shoulder_y)
             forwards.append(abs(nose.x - shoulder_x))
 
-        if not verticals:
-            return JsonResponse({"error": "No valid landmarks"}, status=400)
 
+        # Not enough valid landmarks yet — keep camera on
+        if len(verticals) < 5:
+            return JsonResponse({"status": "incomplete", "valid_frames": len(verticals)})
+
+        # Compute baseline once enough frames collected
         user_baseline["vertical"] = statistics.mean(verticals)
         user_baseline["forward"] = statistics.mean(forwards)
 
-        print("✅ Calibration baseline saved:", user_baseline)
         return JsonResponse({"status": "success", "baseline": user_baseline})
 
     except Exception as e:
