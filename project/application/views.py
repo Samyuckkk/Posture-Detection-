@@ -10,58 +10,80 @@ from django.db.models.functions import TruncHour, TruncDay, TruncMonth
 
 import base64, cv2, numpy as np, mediapipe as mp
 from keras import models as keras_models
+from numpy.linalg import norm
+import traceback
 
 from .models import PostureLog
 
-# Load ML posture detection model once
+
+# ---------- LOAD MODEL & REFERENCES ----------
+
 MODEL = keras_models.load_model("application/posture_model.h5")
 LABELS = np.load("application/labels.npy")
 
-# Initialize Mediapipe Pose once
+# Optional reference posture vectors (for fallback)
+try:
+    UPRIGHT_VEC = np.load("application/upright.npy")
+    SLOUCH_VEC = np.load("application/slouch.npy")
+    print("✅ Loaded upright.npy and slouch.npy reference vectors.")
+except Exception as e:
+    print("⚠️ Reference posture vectors not found:", e)
+    UPRIGHT_VEC = SLOUCH_VEC = None
+
+
+# ---------- MEDIAPIPE SETUP ----------
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(
     static_image_mode=False,
     model_complexity=1,
     smooth_landmarks=True,
     enable_segmentation=False,
-    min_detection_confidence=0.3,  # more sensitive
-    min_tracking_confidence=0.3
+    min_detection_confidence=0.4,
+    min_tracking_confidence=0.4
 )
+
+
+# ---------- UTILITY ----------
+def cosine_similarity(a, b):
+    """Compute cosine similarity between two vectors."""
+    return np.dot(a, b) / (norm(a) * norm(b) + 1e-6)
 
 
 # ---------- MAIN VIEWS ----------
 def index(request):
-    return render(request, 'index.html')
+    return render(request, "index.html")
 
 
 def login_page(request):
+    """Handles both login and registration."""
     if request.method == "POST":
         if 'login_button' in request.POST:
-            username = request.POST.get('email')
-            password = request.POST.get('password')
+            username = request.POST.get("email")
+            password = request.POST.get("password")
             user = authenticate(request, username=username, password=password)
 
-            if user is not None:
+            if user:
                 login(request, user)
-                return redirect('dashboard')
+                return redirect("dashboard")
             else:
-                messages.error(request, "Invalid email id or password")
+                messages.error(request, "Invalid email ID or password")
 
         elif 'register_button' in request.POST:
-            username = request.POST.get('email')
-            first_name = request.POST.get('name')
-            password = request.POST.get('password')
+            username = request.POST.get("email")
+            first_name = request.POST.get("name")
+            password = request.POST.get("password")
 
             if User.objects.filter(username=username).exists():
                 messages.error(request, "User already exists")
             else:
-                user = User.objects.create_user(username=username, password=password, first_name=first_name)
+                User.objects.create_user(username=username, password=password, first_name=first_name)
                 messages.success(request, "Registration successful! Please login.")
 
-    return render(request, 'login.html')
+    return render(request, "login.html")
 
 
 def dashboard(request):
+    """Main dashboard view with today's slouch count."""
     if request.user.is_authenticated:
         today = timezone.now().date()
         slouch_count = PostureLog.objects.filter(
@@ -72,11 +94,7 @@ def dashboard(request):
     else:
         slouch_count = 0
 
-    context = {
-        "slouch_count": slouch_count,
-    }
-    return render(request, "dashboard.html", context)
-
+    return render(request, "dashboard.html", {"slouch_count": slouch_count})
 
 
 def settings(request):
@@ -84,7 +102,9 @@ def settings(request):
 
 
 # ---------- ML INFERENCE ----------
+@csrf_exempt
 def process_frame(request):
+    """Processes incoming webcam frame, predicts posture, and stores logs."""
     if request.method != "POST":
         return JsonResponse({"error": "Invalid method"}, status=405)
 
@@ -93,43 +113,66 @@ def process_frame(request):
         return JsonResponse({"error": "No frame received"}, status=400)
 
     try:
-        # Decode base64 frame
+        # --- Decode the base64 frame ---
         header, encoded = data_url.split(",", 1)
         img_bytes = base64.b64decode(encoded)
         np_arr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if frame is None or frame.size == 0:
-            print("❌ Empty frame")
+            print("❌ Empty frame received.")
             return JsonResponse({"error": "Empty frame"}, status=400)
 
-        # Flip and process through Mediapipe
+        # --- Process with Mediapipe ---
         frame_flipped = cv2.flip(frame, 1)
         rgb = cv2.cvtColor(frame_flipped, cv2.COLOR_BGR2RGB)
         results = pose.process(rgb)
 
         if not results.pose_landmarks:
-            print("⚠️ No landmarks detected — returning last known posture")
+            print("⚠️ No landmarks detected.")
             return JsonResponse({"posture": "unknown"})
 
-        # Extract landmark features
+        # --- Extract upper-body landmarks ---
         landmarks = results.pose_landmarks.landmark
-        base_x, base_y = landmarks[24].x, landmarks[24].y
+        left_shoulder = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value]
+        right_shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
+
+        base_x = (left_shoulder.x + right_shoulder.x) / 2
+        base_y = (left_shoulder.y + right_shoulder.y) / 2
+        shoulder_width = abs(right_shoulder.x - left_shoulder.x)
+        if shoulder_width < 1e-5:
+            shoulder_width = 1.0  # avoid divide by zero
+
         features = []
         for lm in landmarks:
-            features.append(lm.x - base_x)
-            features.append(lm.y - base_y)
+            features.append((lm.x - base_x) / shoulder_width)
+            features.append((lm.y - base_y) / shoulder_width)
         features = np.array(features).reshape(1, -1)
 
-        # Predict posture using trained model
-        prediction = LABELS[np.argmax(MODEL.predict(features, verbose=0))]
-        posture = prediction.lower()
-        if posture == "slouching":
-            posture = "slouch"
+        # --- Predict using trained model ---
+        probs = MODEL.predict(features, verbose=0)[0]
+        confidence = np.max(probs)
+        pred_label = LABELS[np.argmax(probs)].lower()
 
-        print("🧠 Predicted posture:", posture)
+        # --- Confidence filtering + fallback ---
+        if confidence < 0.6 and UPRIGHT_VEC is not None and SLOUCH_VEC is not None:
+            upright_sim = cosine_similarity(features.flatten(), UPRIGHT_VEC)
+            slouch_sim = cosine_similarity(features.flatten(), SLOUCH_VEC)
 
-        # Save posture in DB (including unauthenticated users as anonymous)
+            if upright_sim > slouch_sim + 0.02:
+                posture = "upright"
+            elif slouch_sim > upright_sim + 0.02:
+                posture = "slouch"
+            else:
+                posture = "unknown"
+        else:
+            posture = pred_label
+            if posture == "slouching":
+                posture = "slouch"
+
+        print(f"🧠 Predicted posture: {posture} (conf={confidence:.2f})")
+
+        # --- Save to database ---
         try:
             PostureLog.objects.create(
                 user=request.user if request.user.is_authenticated else None,
@@ -143,22 +186,17 @@ def process_frame(request):
         return JsonResponse({"posture": posture})
 
     except Exception as e:
-        import traceback
         print("❌ Full process_frame error:\n", traceback.format_exc())
         return JsonResponse({"error": str(e)}, status=500)
 
 
-
-# ---------- SIMULATED CALIBRATION ----------
+# ---------- CALIBRATION ----------
 @csrf_exempt
 def calibrate_posture(request):
-    """
-    Fake calibration — just simulates progress and success.
-    """
+    """Simulated calibration success."""
     if request.method != "POST":
         return JsonResponse({"error": "Invalid method"}, status=405)
 
-    # Just simulate success after few frames
     return JsonResponse({
         "status": "success",
         "baseline": {"ear_shoulder": 0.1234},
@@ -176,12 +214,10 @@ def slouch_count_today(request):
     today = timezone.now().date()
     count = PostureLog.objects.filter(
         user=request.user,
-        posture__in=["slouch", "slouching"],  # ✅ Match both
+        posture__in=["slouch", "slouching"],
         timestamp__date=today
     ).count()
-
     return JsonResponse({"slouches_today": count})
-
 
 
 @csrf_exempt
