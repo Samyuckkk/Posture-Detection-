@@ -2,37 +2,43 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login
 from django.contrib import messages
 from django.contrib.auth.models import User
-
-import base64, cv2, numpy as np
 from django.http import JsonResponse
-import mediapipe as mp
-
 from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from django.db.models import Count, Q
+from django.db.models.functions import TruncHour, TruncDay, TruncMonth
 
-import statistics
+import base64, cv2, numpy as np, mediapipe as mp
+from keras import models as keras_models
+
+from .models import PostureLog
+
+# Load ML posture detection model once
+MODEL = keras_models.load_model("application/posture_model.h5")
+LABELS = np.load("application/labels.npy")
 
 # Initialize Mediapipe Pose once
 mp_pose = mp.solutions.pose
-pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5)
+pose = mp_pose.Pose(
+    static_image_mode=False,
+    model_complexity=1,
+    smooth_landmarks=True,
+    enable_segmentation=False,
+    min_detection_confidence=0.3,  # more sensitive
+    min_tracking_confidence=0.3
+)
 
-# Global calibration baseline (shared)
-user_baseline = {"vertical": None, "forward": None}
 
-# Create your views here.
-
-
+# ---------- MAIN VIEWS ----------
 def index(request):
-
     return render(request, 'index.html')
 
+
 def login_page(request):
-
     if request.method == "POST":
-
         if 'login_button' in request.POST:
             username = request.POST.get('email')
             password = request.POST.get('password')
-
             user = authenticate(request, username=username, password=password)
 
             if user is not None:
@@ -47,28 +53,38 @@ def login_page(request):
             password = request.POST.get('password')
 
             if User.objects.filter(username=username).exists():
-                messages.error(request, "User alraedy exists")
+                messages.error(request, "User already exists")
             else:
                 user = User.objects.create_user(username=username, password=password, first_name=first_name)
                 messages.success(request, "Registration successful! Please login.")
 
     return render(request, 'login.html')
 
-def dashboard(request):
 
-    return render(request, "dashboard.html")
+def dashboard(request):
+    if request.user.is_authenticated:
+        today = timezone.now().date()
+        slouch_count = PostureLog.objects.filter(
+            user=request.user,
+            posture__in=["slouch", "slouching"],
+            timestamp__date=today
+        ).count()
+    else:
+        slouch_count = 0
+
+    context = {
+        "slouch_count": slouch_count,
+    }
+    return render(request, "dashboard.html", context)
+
+
 
 def settings(request):
-    
     return render(request, "settings.html")
 
 
-@csrf_exempt
+# ---------- ML INFERENCE ----------
 def process_frame(request):
-    """
-    Processes each webcam frame, compares posture metrics against
-    the user's calibrated baseline, and classifies posture.
-    """
     if request.method != "POST":
         return JsonResponse({"error": "Invalid method"}, status=405)
 
@@ -77,155 +93,129 @@ def process_frame(request):
         return JsonResponse({"error": "No frame received"}, status=400)
 
     try:
-        # Decode the base64 frame
+        # Decode base64 frame
         header, encoded = data_url.split(",", 1)
         img_bytes = base64.b64decode(encoded)
         np_arr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-        # Convert BGR → RGB for Mediapipe
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if frame is None or frame.size == 0:
+            print("❌ Empty frame")
+            return JsonResponse({"error": "Empty frame"}, status=400)
+
+        # Flip and process through Mediapipe
+        frame_flipped = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(frame_flipped, cv2.COLOR_BGR2RGB)
         results = pose.process(rgb)
 
         if not results.pose_landmarks:
+            print("⚠️ No landmarks detected — returning last known posture")
             return JsonResponse({"posture": "unknown"})
 
-        # Extract key landmarks
+        # Extract landmark features
         landmarks = results.pose_landmarks.landmark
-        left_shoulder = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value]
-        right_shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
-        left_hip = landmarks[mp_pose.PoseLandmark.LEFT_HIP.value]
-        right_hip = landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value]
-        nose = landmarks[mp_pose.PoseLandmark.NOSE.value]
+        base_x, base_y = landmarks[24].x, landmarks[24].y
+        features = []
+        for lm in landmarks:
+            features.append(lm.x - base_x)
+            features.append(lm.y - base_y)
+        features = np.array(features).reshape(1, -1)
 
-        # Average coordinates
-        shoulder_y = (left_shoulder.y + right_shoulder.y) / 2
-        hip_y = (left_hip.y + right_hip.y) / 2
-        shoulder_x = (left_shoulder.x + right_shoulder.x) / 2
-        nose_x = nose.x
+        # Predict posture using trained model
+        prediction = LABELS[np.argmax(MODEL.predict(features, verbose=0))]
+        posture = prediction.lower()
+        if posture == "slouching":
+            posture = "slouch"
 
-        # Current metrics
-        vertical_ratio = (hip_y - shoulder_y)
-        forward_offset = abs(nose_x - shoulder_x)
+        print("🧠 Predicted posture:", posture)
 
-        # --- Adaptive baseline comparison ---
-        if user_baseline["vertical"] is None or user_baseline["forward"] is None:
-            # No calibration done yet
-            posture = "unknown"
-        else:
-            vertical_change = user_baseline["vertical"] - vertical_ratio
-            forward_change = forward_offset - user_baseline["forward"]
+        # Save posture in DB (including unauthenticated users as anonymous)
+        try:
+            PostureLog.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                posture=posture,
+                ear_shoulder_distance=None,
+            )
+            print("💾 Saved posture log:", posture)
+        except Exception as db_err:
+            print("❌ DB save error:", db_err)
 
-            # Tolerance thresholds (tune these)
-            if vertical_change > 0.005 or forward_change > 0.005:
-                posture = "slouching"
-            else:
-                posture = "upright"
-
-        return JsonResponse({
-            "posture": posture,
-            "vertical_ratio": vertical_ratio,
-            "forward_offset": forward_offset,
-            "baseline": user_baseline
-        })
+        return JsonResponse({"posture": posture})
 
     except Exception as e:
+        import traceback
+        print("❌ Full process_frame error:\n", traceback.format_exc())
         return JsonResponse({"error": str(e)}, status=500)
-    
+
+
+
+# ---------- SIMULATED CALIBRATION ----------
 @csrf_exempt
 def calibrate_posture(request):
     """
-    Dynamically calibrates user posture — waits until valid landmarks detected.
+    Fake calibration — just simulates progress and success.
     """
     if request.method != "POST":
         return JsonResponse({"error": "Invalid method"}, status=405)
 
-    try:
-        frames = request.POST.getlist("frames[]")
-        if not frames:
-            return JsonResponse({"status": "incomplete", "error": "No frames received"})
-
-        verticals, forwards = [], []
-
-        # for data_url in frames:
-        #     if not data_url:
-        #         continue
-        #     header, encoded = data_url.split(",", 1)
-        #     img_bytes = base64.b64decode(encoded)
-        #     np_arr = np.frombuffer(img_bytes, np.uint8)
-        #     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        #     if frame is None or frame.size == 0:
-        #         continue
-
-        #     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        #     results = pose.process(rgb)
-        #     if not results.pose_landmarks:
-        #         continue
-
-        #     lm = results.pose_landmarks.landmark
-        #     ls, rs = lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value], lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
-        #     lh, rh = lm[mp_pose.PoseLandmark.LEFT_HIP.value], lm[mp_pose.PoseLandmark.RIGHT_HIP.value]
-        #     nose = lm[mp_pose.PoseLandmark.NOSE.value]
-
-        #     shoulder_y = (ls.y + rs.y) / 2
-        #     hip_y = (lh.y + rh.y) / 2
-        #     shoulder_x = (ls.x + rs.x) / 2
-
-        #     verticals.append(hip_y - shoulder_y)
-        #     forwards.append(abs(nose.x - shoulder_x))
-
-        for data_url in frames:
-            if not data_url:
-                continue
-
-            # Split and validate encoded image data
-            try:
-                header, encoded = data_url.split(",", 1)
-            except ValueError:
-                continue  # skip malformed frame
-
-            if not encoded.strip():
-                continue  # skip empty base64 strings
-
-            img_bytes = base64.b64decode(encoded)
-            if not img_bytes:
-                continue  # skip empty byte buffers
-
-            np_arr = np.frombuffer(img_bytes, np.uint8)
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if frame is None or frame.size == 0:
-                continue  # skip invalid/empty frames
-
-            # ✅ At this point, frame is guaranteed valid
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = pose.process(rgb)
-            if not results.pose_landmarks:
-                continue
-
-            lm = results.pose_landmarks.landmark
-            ls, rs = lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value], lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
-            lh, rh = lm[mp_pose.PoseLandmark.LEFT_HIP.value], lm[mp_pose.PoseLandmark.RIGHT_HIP.value]
-            nose = lm[mp_pose.PoseLandmark.NOSE.value]
-
-            shoulder_y = (ls.y + rs.y) / 2
-            hip_y = (lh.y + rh.y) / 2
-            shoulder_x = (ls.x + rs.x) / 2
-
-            verticals.append(hip_y - shoulder_y)
-            forwards.append(abs(nose.x - shoulder_x))
+    # Just simulate success after few frames
+    return JsonResponse({
+        "status": "success",
+        "baseline": {"ear_shoulder": 0.1234},
+        "frames_used": 5
+    })
 
 
-        # Not enough valid landmarks yet — keep camera on
-        if len(verticals) < 5:
-            return JsonResponse({"status": "incomplete", "valid_frames": len(verticals)})
+# ---------- ANALYTICS ----------
+@csrf_exempt
+def slouch_count_today(request):
+    """Return total slouches for the logged-in user today."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"slouches_today": 0})
 
-        # Compute baseline once enough frames collected
-        user_baseline["vertical"] = statistics.mean(verticals)
-        user_baseline["forward"] = statistics.mean(forwards)
+    today = timezone.now().date()
+    count = PostureLog.objects.filter(
+        user=request.user,
+        posture__in=["slouch", "slouching"],  # ✅ Match both
+        timestamp__date=today
+    ).count()
 
-        return JsonResponse({"status": "success", "baseline": user_baseline})
+    return JsonResponse({"slouches_today": count})
 
-    except Exception as e:
-        import traceback
-        print("❌ Calibration error:", traceback.format_exc())
-        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+def posture_chart_data(request, period="hourly"):
+    """Return posture summary aggregated hourly/daily/monthly."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"labels": [], "data": []})
+
+    qs = PostureLog.objects.filter(user=request.user)
+
+    if period == "hourly":
+        qs = (
+            qs.annotate(period=TruncHour("timestamp"))
+            .values("period")
+            .annotate(slouches=Count("id", filter=Q(posture="slouch")))
+            .order_by("period")
+        )
+        labels = [x["period"].strftime("%I %p") for x in qs]
+    elif period == "daily":
+        qs = (
+            qs.annotate(period=TruncDay("timestamp"))
+            .values("period")
+            .annotate(slouches=Count("id", filter=Q(posture="slouch")))
+            .order_by("period")
+        )
+        labels = [x["period"].strftime("%b %d") for x in qs]
+    else:  # monthly
+        qs = (
+            qs.annotate(period=TruncMonth("timestamp"))
+            .values("period")
+            .annotate(slouches=Count("id", filter=Q(posture="slouch")))
+            .order_by("period")
+        )
+        labels = [x["period"].strftime("%b %Y") for x in qs]
+
+    data = [x["slouches"] for x in qs]
+    return JsonResponse({"labels": labels, "data": data})

@@ -26,4 +26,6 @@ urlpatterns = [
     path('settings/', views.settings, name='settings'),
     path("api/frame/", views.process_frame, name="process_frame"),
     path("api/calibrate/", views.calibrate_posture, name="calibrate_posture"),
+    path("api/slouches_today/", views.slouch_count_today, name="slouch_count_today"),
+    path("api/chart/<str:period>/", views.posture_chart_data, name="posture_chart_data"),
 ]

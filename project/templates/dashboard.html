@@ -7,6 +7,8 @@
     
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Load Inter font from Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -275,11 +277,15 @@
                                 <div id="posture-status-badge">
                                     <p id="posture-status-text" class="text-3xl font-bold text-gray-400">---</p>
                                 </div>
+                                {% comment %} <div class="mt-2 text-sm text-gray-500">
+                                    <p>Baseline: <span id="baseline-ear-shoulder">---</span></p>
+                                    <p>Current: <span id="current-ear-shoulder">---</span></p>
+                                </div> {% endcomment %}
                             </div>
                             <!-- Slouch Count -->
                             <div>
                                 <p class="text-sm font-medium text-gray-500 mb-2">Slouches Today</p>
-                                <p id="slouch-count" class="text-5xl font-bold text-[var(--primary)]">0</p>
+                                <p id="slouch-count" class="text-5xl font-bold text-[var(--primary)]">{{ slouch_count }}</p>
                             </div>
                         </div>
                     </div>
@@ -299,26 +305,17 @@
                         <!-- Chart Area -->
                         <div class="p-8">
                             <!-- Mock Bar Chart -->
-                            <div class="h-64 flex items-end justify-between space-x-3">
-                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 30%;"></div></div>
-                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 50%;"></div></div>
-                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 20%;"></div></div>
-                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 70%;"></div></div>
-                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 40%;"></div></div>
-                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 60%;"></div></div>
-                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 80%;"></div></div>
-                                <div class="chart-bar-bg w-full h-full flex items-end"><div class="chart-bar w-full" style="height: 30%;"></div></div>
-                            </div>
+                            <canvas id="postureChart" height="100"></canvas>
                             <!-- X-Axis Labels -->
                             <div class="flex justify-between space-x-3 mt-2 text-sm text-gray-500">
-                                <span class="w-full text-center">9am</span>
+                                {% comment %} <span class="w-full text-center">9am</span>
                                 <span class="w-full text-center">10am</span>
                                 <span class="w-full text-center">11am</span>
                                 <span class="w-full text-center">12pm</span>
                                 <span class="w-full text-center">1pm</span>
                                 <span class="w-full text-center">2pm</span>
                                 <span class="w-full text-center">3pm</span>
-                                <span class="w-full text-center">4pm</span>
+                                <span class="w-full text-center">4pm</span> {% endcomment %}
                             </div>
                         </div>
                     </div>
@@ -349,24 +346,34 @@
 
 
     <script>
-// dashboard.js — PosturePerfect
+// dashboard.js — simplified for ML-based posture detection
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("✅ Dashboard JS loaded after DOM");
+  // --- CSRF helper ---
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== "") {
+    const cookies = document.cookie.split(";");
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === name + "=") {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+const csrftoken = getCookie("csrftoken");
+
 
   // --- Global State ---
-  let isCalibrated = false;
   let isMonitoring = false;
-  let slouchCount = 0;
   let videoStream = null;
-  let slouchSimulationTimer = null;
   let frameInterval = null;
 
   // --- DOM Elements ---
-  const calibrateBtn = document.getElementById("calibrate-btn");
-  const calibrationDefault = document.getElementById("calibration-default");
-  const calibrationSuccess = document.getElementById("calibration-success");
-
   const toggleMonitoringBtn = document.getElementById("toggle-monitoring-btn");
   const monitoringBtnText = document.getElementById("monitoring-btn-text");
   const playIcon = document.getElementById("play-icon");
@@ -379,9 +386,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const postureStatusText = document.getElementById("posture-status-text");
   const slouchCountText = document.getElementById("slouch-count");
 
+  const calibrationDefault = document.getElementById("calibration-default");
   const slouchToast = document.getElementById("toast");
-  const infoToast = document.getElementById("toast-info");
-  const infoToastText = document.getElementById("toast-info-text");
 
   // --- Video Setup ---
   const videoElement = document.createElement("video");
@@ -420,148 +426,44 @@ document.addEventListener("DOMContentLoaded", () => {
       videoElement.parentNode.removeChild(videoElement);
   }
 
-  // --- Toasts ---
-  function showInfoToast(message) {
-    infoToastText.textContent = message;
-    infoToast.style.transform = "translateX(0)";
-    setTimeout(() => {
-      infoToast.style.transform = "translateX(calc(100% + 1.5rem))";
-    }, 3000);
-  }
-
+  // --- Toast ---
   function showSlouchToast() {
     slouchToast.classList.add("show");
-    setTimeout(() => {
-      slouchToast.classList.remove("show");
-    }, 3000);
+    setTimeout(() => slouchToast.classList.remove("show"), 3000);
   }
-
-// --- Smart Calibration ---
-calibrateBtn.addEventListener("click", async () => {
-  const statusText = document.getElementById("calibration-status");
-
-  if (isCalibrated) {
-    // Reset calibration
-    stopCamera();
-    calibrationSuccess.classList.add("hidden");
-    calibrationDefault.classList.remove("hidden");
-    calibrationDefault.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-      </svg>
-      <p class="text-gray-500 font-medium">Webcam feed will appear here</p>
-    `;
-    calibrateBtn.textContent = "Start Calibration";
-    isCalibrated = false;
-    statusText.textContent = "Status: Waiting to start...";
-    console.log("🔁 Recalibration reset");
-    return;
-  }
-
-  calibrateBtn.disabled = true;
-  calibrateBtn.textContent = "Calibrating...";
-  statusText.textContent = "Status: 🟡 Detecting landmarks...";
-  await startCameraPreview(calibrationDefault);
-  console.log("📸 Starting live calibration mode...");
-
-  let success = false;
-while (!success) {
-  const frames = [];
-
-  for (let i = 0; i < 5; i++) {
-    // Wait until camera video dimensions are valid
-    if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
-      console.warn("⚠️ Waiting for video dimensions...");
-      await new Promise((r) => setTimeout(r, 200));
-      continue;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = videoElement.videoWidth;
-    canvas.height = videoElement.videoHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(videoElement, 0, 0);
-    frames.push(canvas.toDataURL("image/jpeg"));
-    await new Promise((res) => setTimeout(res, 150));
-  }
-
-  // Skip sending if no frames were captured properly
-  if (frames.length === 0) {
-    console.warn("⚠️ No valid frames captured yet — retrying...");
-    await new Promise((res) => setTimeout(res, 500));
-    continue;
-  }
-
-  const formData = new FormData();
-  frames.forEach((f) => formData.append("frames[]", f));
-
-  const res = await fetch("/api/calibrate/", {
-    method: "POST",
-    body: formData,
-  });
-
-  const data = await res.json();
-  console.log("📡 Calibration progress:", data);
-
-  if (data.status === "success") {
-    success = true;
-    console.log("✅ Calibration baseline received:", data);
-    stopCamera();
-    calibrationDefault.classList.add("hidden");
-    calibrationSuccess.classList.remove("hidden");
-    calibrateBtn.textContent = "Recalibrate";
-    isCalibrated = true;
-    showInfoToast("Calibration successful!");
-    statusText.textContent = "Status: ✅ Calibration complete!";
-    statusText.className = "text-sm text-green-600 mt-2 text-center";
-  } else if (data.status === "incomplete") {
-    console.log(`⏳ Landmarks not stable yet (${data.valid_frames || 0}/5)...`);
-    statusText.textContent = "Status: 🟡 Detecting landmarks...";
-    showInfoToast("Adjust your camera or posture...");
-  } else if (data.error) {
-    console.log("❌ Calibration error:", data.error);
-    showInfoToast("Error: " + data.error);
-    statusText.textContent = "Status: ❌ Error — try again";
-    statusText.className = "text-sm text-red-600 mt-2 text-center";
-    break;
-  }
-
-  await new Promise((res) => setTimeout(res, 800));
-}
-
-
-  calibrateBtn.disabled = false;
-});
 
   // --- Frame Sending ---
   async function sendFrameToServer() {
-    if (!videoStream || !isMonitoring) {
-      console.log("⚠️ Skipping frame: no video or monitoring off");
-      return;
-    }
+    if (!videoStream || !isMonitoring) return;
 
-    console.log("📤 Sending frame to backend...");
     const canvas = document.createElement("canvas");
     canvas.width = videoElement.videoWidth;
     canvas.height = videoElement.videoHeight;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(videoElement, 0, 0);
-
     const dataURL = canvas.toDataURL("image/jpeg");
 
     try {
       const res = await fetch("/api/frame/", {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+  "Content-Type": "application/x-www-form-urlencoded",
+  "X-CSRFToken": csrftoken
+},
         body: new URLSearchParams({ frame: dataURL }),
       });
-
       const data = await res.json();
       console.log("✅ Server response:", data);
 
-      if (data.posture) {
-        if (data.posture === "upright") setPosture(true);
-        else if (data.posture === "slouching") setPosture(false);
+      // Update posture display
+      if (data.posture === "upright") setPosture(true);
+      else if (data.posture === "slouch" || data.posture === "slouching") {
+        setPosture(false);
+        slouchCountText.textContent =
+          parseInt(slouchCountText.textContent) + 1;
+        showSlouchToast();
+      } else {
+        setPosture(null);
       }
     } catch (err) {
       console.error("❌ Error sending frame:", err);
@@ -570,12 +472,8 @@ while (!success) {
 
   function startFrameLoop() {
     console.log("📸 Starting frame loop...");
-    if (!videoStream) console.log("⚠️ No video stream active yet");
     clearInterval(frameInterval);
-    frameInterval = setInterval(() => {
-      console.log("🌀 Frame loop tick");
-      sendFrameToServer();
-    }, 1000);
+    frameInterval = setInterval(sendFrameToServer, 1000);
   }
 
   function stopFrameLoop() {
@@ -583,14 +481,23 @@ while (!success) {
     clearInterval(frameInterval);
   }
 
+  // --- Posture Indicator ---
+  function setPosture(isGood) {
+    if (isGood === null) {
+      postureStatusText.textContent = "Adjust Camera";
+      postureStatusText.className = "text-3xl font-bold text-yellow-500";
+    } else if (isGood) {
+      postureStatusText.textContent = "GOOD";
+      postureStatusText.className = "text-3xl font-bold text-green-500";
+    } else {
+      postureStatusText.textContent = "SLOUCHING!";
+      postureStatusText.className = "text-3xl font-bold text-red-500";
+    }
+  }
+
   // --- Monitoring Toggle ---
   toggleMonitoringBtn.addEventListener("click", async () => {
     console.log("🟢 Toggle Monitoring clicked");
-
-    if (!isCalibrated) {
-      showInfoToast("Please calibrate your posture first!");
-      return;
-    }
 
     isMonitoring = !isMonitoring;
 
@@ -607,8 +514,6 @@ while (!success) {
       monitoringStatusText.textContent = "ON";
 
       await startCameraPreview(calibrationDefault);
-      setPosture(true);
-      startSlouchSimulation();
       startFrameLoop();
     } else {
       console.log("🛑 Monitoring turned OFF");
@@ -622,74 +527,48 @@ while (!success) {
       monitoringStatusBadge.classList.add("bg-gray-400");
       monitoringStatusText.textContent = "OFF";
 
-      setPosture(null);
-      stopSlouchSimulation();
       stopFrameLoop();
       stopCamera();
+      setPosture(null);
     }
   });
 
-  // --- Posture Indicator ---
-  function setPosture(isGood) {
-    if (isGood === null) {
-      postureStatusText.textContent = "---";
-      postureStatusText.className = "text-3xl font-bold text-gray-400";
-    } else if (isGood) {
-      postureStatusText.textContent = "GOOD";
-      postureStatusText.className = "text-3xl font-bold text-green-500";
-    } else {
-      postureStatusText.textContent = "SLOUCHING!";
-      postureStatusText.className = "text-3xl font-bold text-[var(--danger)]";
-    }
-  }
-
-  // --- Simulated Slouching ---
-  function startSlouchSimulation() {
-    slouchSimulationTimer = setInterval(() => {
-      if (isMonitoring && Math.random() < 0.3) triggerSlouch();
-    }, 5000);
-  }
-
-  function stopSlouchSimulation() {
-    clearInterval(slouchSimulationTimer);
-  }
-
-  function triggerSlouch() {
-    if (!isMonitoring) return;
-    setPosture(false);
-    showSlouchToast();
-    slouchCount++;
-    slouchCountText.textContent = slouchCount;
-    setTimeout(() => {
-      if (isMonitoring) setPosture(true);
-    }, 4000);
-  }
-
-  // --- Chart Tabs ---
-  const tabs = document.querySelectorAll(".stat-tab");
-  tabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      tabs.forEach((t) => t.classList.remove("active"));
-      tab.classList.add("active");
-      randomizeChart();
-    });
+  // --- Chart ---
+  const ctx = document.getElementById("postureChart").getContext("2d");
+  let postureChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "Slouches",
+          data: [],
+          borderRadius: 10,
+          backgroundColor: "rgba(20, 184, 166, 0.7)",
+        },
+      ],
+    },
+    options: { scales: { y: { beginAtZero: true } } },
   });
 
-  function randomizeChart() {
-    const bars = document.querySelectorAll(".chart-bar");
-    bars.forEach((bar) => {
-      const newHeight = Math.floor(Math.random() * 80) + 20;
-      bar.style.height = `${newHeight}%`;
-    });
+  async function loadChart(period = "hourly") {
+    const res = await fetch(`/api/chart/${period}/`);
+    const data = await res.json();
+    postureChart.data.labels = data.labels;
+    postureChart.data.datasets[0].data = data.data;
+    postureChart.update();
   }
 
-  randomizeChart();
+  loadChart("hourly");
+
+  document.getElementById("tab-hourly").addEventListener("click", () => loadChart("hourly"));
+  document.getElementById("tab-daily").addEventListener("click", () => loadChart("daily"));
+  document.getElementById("tab-monthly").addEventListener("click", () => loadChart("monthly"));
+
   console.log("✅ All JS initialized");
 });
-
-
-
 </script>
+
 
 </body>
 </html>
