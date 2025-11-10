@@ -104,7 +104,9 @@ def settings(request):
 # ---------- ML INFERENCE ----------
 @csrf_exempt
 def process_frame(request):
-    """Processes incoming webcam frame, predicts posture, and stores logs."""
+    """
+    Processes webcam frames and predicts posture using the same logic as inference.py.
+    """
     if request.method != "POST":
         return JsonResponse({"error": "Invalid method"}, status=405)
 
@@ -113,66 +115,43 @@ def process_frame(request):
         return JsonResponse({"error": "No frame received"}, status=400)
 
     try:
-        # --- Decode the base64 frame ---
+        # Decode base64 frame
         header, encoded = data_url.split(",", 1)
         img_bytes = base64.b64decode(encoded)
         np_arr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if frame is None or frame.size == 0:
-            print("❌ Empty frame received.")
+            print("❌ Empty frame")
             return JsonResponse({"error": "Empty frame"}, status=400)
 
-        # --- Process with Mediapipe ---
-        frame_flipped = cv2.flip(frame, 1)
-        rgb = cv2.cvtColor(frame_flipped, cv2.COLOR_BGR2RGB)
+        # Flip and process with Mediapipe
+        frame = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(rgb)
 
         if not results.pose_landmarks:
             print("⚠️ No landmarks detected.")
             return JsonResponse({"posture": "unknown"})
 
-        # --- Extract upper-body landmarks ---
+        # Extract landmarks (SAME AS inference.py)
         landmarks = results.pose_landmarks.landmark
-        left_shoulder = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value]
-        right_shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
+        base_x = landmarks[24].x  # right hip (used in training)
+        base_y = landmarks[24].y
 
-        base_x = (left_shoulder.x + right_shoulder.x) / 2
-        base_y = (left_shoulder.y + right_shoulder.y) / 2
-        shoulder_width = abs(right_shoulder.x - left_shoulder.x)
-        if shoulder_width < 1e-5:
-            shoulder_width = 1.0  # avoid divide by zero
-
-        features = []
+        lst = []
         for lm in landmarks:
-            features.append((lm.x - base_x) / shoulder_width)
-            features.append((lm.y - base_y) / shoulder_width)
-        features = np.array(features).reshape(1, -1)
+            lst.append(lm.x - base_x)
+            lst.append(lm.y - base_y)
+        lst = np.array(lst).reshape(1, -1)
 
-        # --- Predict using trained model ---
-        probs = MODEL.predict(features, verbose=0)[0]
-        confidence = np.max(probs)
-        pred_label = LABELS[np.argmax(probs)].lower()
+        # Predict posture
+        pred = LABELS[np.argmax(MODEL.predict(lst, verbose=0))].lower()
+        posture = "slouch" if pred == "slouch" else "upright"
 
-        # --- Confidence filtering + fallback ---
-        if confidence < 0.6 and UPRIGHT_VEC is not None and SLOUCH_VEC is not None:
-            upright_sim = cosine_similarity(features.flatten(), UPRIGHT_VEC)
-            slouch_sim = cosine_similarity(features.flatten(), SLOUCH_VEC)
+        print("🧠 Predicted posture:", posture)
 
-            if upright_sim > slouch_sim + 0.02:
-                posture = "upright"
-            elif slouch_sim > upright_sim + 0.02:
-                posture = "slouch"
-            else:
-                posture = "unknown"
-        else:
-            posture = pred_label
-            if posture == "slouching":
-                posture = "slouch"
-
-        print(f"🧠 Predicted posture: {posture} (conf={confidence:.2f})")
-
-        # --- Save to database ---
+        # Save to DB
         try:
             PostureLog.objects.create(
                 user=request.user if request.user.is_authenticated else None,
